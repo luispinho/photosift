@@ -11,15 +11,18 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFileDialog, QMessageBox,
     QMenuBar, QMenu, QStatusBar, QFrame, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal
-from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal, QUrl
+from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent
 from PIL import Image, ImageOps
 
 from .photo_manager import PhotoManager, PhotoPair
 
 
 class ImageLabel(QLabel):
-    """Custom QLabel for displaying images with proper scaling."""
+    """Custom QLabel for displaying images with proper scaling and drag & drop."""
+    
+    # Signal to notify when a folder is dropped
+    folder_dropped = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -27,7 +30,7 @@ class ImageLabel(QLabel):
         self.setStyleSheet("background-color: #2b2b2b; border: 1px solid #555;")
         self.setMinimumSize(400, 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setText("No image loaded")
+        self.setText("No image loaded\n\nDrag & drop a folder here to open it")
         self.setStyleSheet("""
             QLabel {
                 background-color: #2b2b2b;
@@ -37,6 +40,67 @@ class ImageLabel(QLabel):
                 font-size: 16px;
             }
         """)
+        
+        # Enable drag & drop
+        self.setAcceptDrops(True)
+    
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Handle drag enter events."""
+        if event.mimeData().hasUrls():
+            # Check if any of the URLs is a directory
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    file_path = Path(url.toLocalFile())
+                    if file_path.is_dir():
+                        event.acceptProposedAction()
+                        # Change appearance to indicate drop is accepted
+                        self.setStyleSheet("""
+                            QLabel {
+                                background-color: #3a3a3a;
+                                border: 2px solid #4CAF50;
+                                border-radius: 8px;
+                                color: #4CAF50;
+                                font-size: 16px;
+                            }
+                        """)
+                        return
+        event.ignore()
+    
+    def dragLeaveEvent(self, event):
+        """Handle drag leave events."""
+        # Restore normal appearance
+        self.setStyleSheet("""
+            QLabel {
+                background-color: #2b2b2b;
+                border: 2px solid #555;
+                border-radius: 8px;
+                color: #888;
+                font-size: 16px;
+            }
+        """)
+    
+    def dropEvent(self, event: QDropEvent):
+        """Handle drop events."""
+        # Restore normal appearance
+        self.setStyleSheet("""
+            QLabel {
+                background-color: #2b2b2b;
+                border: 2px solid #555;
+                border-radius: 8px;
+                color: #888;
+                font-size: 16px;
+            }
+        """)
+        
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    file_path = Path(url.toLocalFile())
+                    if file_path.is_dir():
+                        self.folder_dropped.emit(str(file_path))
+                        event.acceptProposedAction()
+                        return
+        event.ignore()
 
 
 class MainWindow(QMainWindow):
@@ -245,6 +309,9 @@ class MainWindow(QMainWindow):
         self.photo_manager.photos_loaded.connect(self._on_photos_loaded)
         self.photo_manager.photo_deleted.connect(self._on_photo_deleted)
         self.photo_manager.error_occurred.connect(self._on_error)
+        
+        # Connect drag & drop signal
+        self.image_label.folder_dropped.connect(self._on_folder_dropped)
     
     def _open_folder(self):
         """Open folder dialog and load photos."""
@@ -559,3 +626,7 @@ class MainWindow(QMainWindow):
                     self.image_cache[cache_key] = pixmap
         except:
             pass  # Ignore preload errors
+    
+    def _on_folder_dropped(self, folder_path: str):
+        """Handle folder dropped onto the image area."""
+        self.photo_manager.load_folder(folder_path)
