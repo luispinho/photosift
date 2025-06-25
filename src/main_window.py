@@ -1,0 +1,561 @@
+"""
+Main Window - The primary UI for the photo culling application
+"""
+
+import os
+from pathlib import Path
+from typing import Optional
+
+from PyQt6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QLabel, QPushButton, QFileDialog, QMessageBox,
+    QMenuBar, QMenu, QStatusBar, QFrame, QSizePolicy
+)
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal
+from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform
+from PIL import Image, ImageOps
+
+from .photo_manager import PhotoManager, PhotoPair
+
+
+class ImageLabel(QLabel):
+    """Custom QLabel for displaying images with proper scaling."""
+    
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("background-color: #2b2b2b; border: 1px solid #555;")
+        self.setMinimumSize(400, 300)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setText("No image loaded")
+        self.setStyleSheet("""
+            QLabel {
+                background-color: #2b2b2b;
+                border: 2px solid #555;
+                border-radius: 8px;
+                color: #888;
+                font-size: 16px;
+            }
+        """)
+
+
+class MainWindow(QMainWindow):
+    """Main application window."""
+    
+    def __init__(self):
+        super().__init__()
+        self.photo_manager = PhotoManager()
+        self.current_pixmap: Optional[QPixmap] = None
+        self.confirm_deletions = True  # Default to requiring confirmation
+        
+        # Image cache for faster navigation
+        self.image_cache = {}  # path -> QPixmap
+        self.cache_size_limit = 10  # Cache up to 10 images
+        
+        self._setup_ui()
+        self._setup_shortcuts()
+        self._connect_signals()
+        
+        # Auto-resize timer to prevent too frequent resizing
+        self.resize_timer = QTimer()
+        self.resize_timer.setSingleShot(True)
+        self.resize_timer.timeout.connect(self._delayed_image_update)
+    
+    def _setup_ui(self):
+        """Set up the user interface."""
+        self.setWindowTitle("PhotoSift - Photo Management Tool")
+        self.setMinimumSize(800, 600)
+        self.resize(1200, 800)
+        
+        # Central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main layout
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Create menu bar
+        self._create_menu_bar()
+        
+        # Photo info panel
+        info_layout = QHBoxLayout()
+        
+        # File name label
+        self.filename_label = QLabel("No file loaded")
+        self.filename_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        info_layout.addWidget(self.filename_label)
+        
+        info_layout.addStretch()
+        
+        # File status label
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("font-size: 12px; color: #666;")
+        info_layout.addWidget(self.status_label)
+        
+        # Photo counter
+        self.counter_label = QLabel("0 / 0")
+        self.counter_label.setStyleSheet("font-size: 12px; color: #666;")
+        info_layout.addWidget(self.counter_label)
+        
+        main_layout.addLayout(info_layout)
+        
+        # Image display area
+        self.image_label = ImageLabel()
+        main_layout.addWidget(self.image_label)
+        
+        # Action buttons
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(15)
+        
+        # Keep all button
+        self.keep_all_btn = QPushButton("Keep All (K)")
+        self.keep_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        self.keep_all_btn.clicked.connect(self._keep_all_files)
+        button_layout.addWidget(self.keep_all_btn)
+        
+        # Delete RAW button
+        self.delete_raw_btn = QPushButton("Delete RAW (R)")
+        self.delete_raw_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #f57c00;
+            }
+            QPushButton:pressed {
+                background-color: #ef6c00;
+            }
+        """)
+        self.delete_raw_btn.clicked.connect(self._delete_raw_file)
+        button_layout.addWidget(self.delete_raw_btn)
+        
+        # Delete all button
+        self.delete_all_btn = QPushButton("Delete All (D)")
+        self.delete_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:pressed {
+                background-color: #d01716;
+            }
+        """)
+        self.delete_all_btn.clicked.connect(self._delete_all_files)
+        button_layout.addWidget(self.delete_all_btn)
+        
+        main_layout.addLayout(button_layout)
+        
+        # Navigation buttons
+        nav_layout = QHBoxLayout()
+        
+        self.prev_btn = QPushButton("← Previous")
+        self.prev_btn.clicked.connect(self._previous_photo)
+        nav_layout.addWidget(self.prev_btn)
+        
+        nav_layout.addStretch()
+        
+        self.next_btn = QPushButton("Next →")
+        self.next_btn.clicked.connect(self._next_photo)
+        nav_layout.addWidget(self.next_btn)
+        
+        main_layout.addLayout(nav_layout)
+        
+        # Status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Ready - Open a folder to begin")
+        
+        # Initially disable action buttons
+        self._update_button_states()
+    
+    def _create_menu_bar(self):
+        """Create the application menu bar."""
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("File")
+        
+        open_folder_action = QAction("Open Folder...", self)
+        open_folder_action.setShortcut(QKeySequence("Ctrl+O"))
+        open_folder_action.triggered.connect(self._open_folder)
+        file_menu.addAction(open_folder_action)
+        
+        file_menu.addSeparator()
+        
+        quit_action = QAction("Quit", self)
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+        
+        # Settings menu
+        settings_menu = menubar.addMenu("Settings")
+        
+        self.confirm_action = QAction("Confirm Deletions", self)
+        self.confirm_action.setCheckable(True)
+        self.confirm_action.setChecked(self.confirm_deletions)
+        self.confirm_action.triggered.connect(self._toggle_confirmation)
+        settings_menu.addAction(self.confirm_action)
+    
+    def _setup_shortcuts(self):
+        """Set up keyboard shortcuts."""
+        # Action shortcuts
+        QShortcut(QKeySequence("K"), self, self._keep_all_files)
+        QShortcut(QKeySequence("R"), self, self._delete_raw_file)
+        QShortcut(QKeySequence("D"), self, self._delete_all_files)
+        
+        # Navigation shortcuts
+        QShortcut(QKeySequence("Left"), self, self._previous_photo)
+        QShortcut(QKeySequence("Right"), self, self._next_photo)
+        QShortcut(QKeySequence("Space"), self, self._next_photo)
+    
+    def _connect_signals(self):
+        """Connect PhotoManager signals to UI updates."""
+        self.photo_manager.photos_loaded.connect(self._on_photos_loaded)
+        self.photo_manager.photo_deleted.connect(self._on_photo_deleted)
+        self.photo_manager.error_occurred.connect(self._on_error)
+    
+    def _open_folder(self):
+        """Open folder dialog and load photos."""
+        folder = QFileDialog.getExistingDirectory(
+            self, 
+            "Select Photo Folder",
+            str(Path.home()),
+            QFileDialog.Option.ShowDirsOnly
+        )
+        
+        if folder:
+            self.photo_manager.load_folder(folder)
+    
+    def _on_photos_loaded(self, count: int):
+        """Handle photos loaded signal."""
+        # Clear cache when loading new folder
+        self._clear_image_cache()
+        
+        if count > 0:
+            self.status_bar.showMessage(f"Loaded {count} photos")
+            self._update_display()
+        else:
+            self.status_bar.showMessage("No photos found in folder")
+            self._clear_display()
+        
+        self._update_button_states()
+    
+    def _on_photo_deleted(self, photo_name: str):
+        """Handle photo deleted signal."""
+        self.status_bar.showMessage(f"Deleted {photo_name}")
+        self._update_display()
+        self._update_button_states()
+    
+    def _on_error(self, error_message: str):
+        """Handle error signal."""
+        QMessageBox.warning(self, "Error", error_message)
+        self.status_bar.showMessage("Error occurred")
+    
+    def _update_display(self):
+        """Update the photo display and info."""
+        photo = self.photo_manager.get_current_photo()
+        
+        if photo:
+            # Update filename
+            self.filename_label.setText(photo.base_name)
+            
+            # Update status
+            self.status_label.setText(photo.file_status)
+            
+            # Update counter
+            current, total = self.photo_manager.get_photo_count()
+            self.counter_label.setText(f"{current} / {total}")
+            
+            # Load and display image
+            self._load_image(photo.display_path)
+            
+            # Preload adjacent images for faster navigation
+            QTimer.singleShot(100, self._preload_adjacent_images)
+        else:
+            self._clear_display()
+    
+    def _clear_display(self):
+        """Clear the display when no photo is available."""
+        self.filename_label.setText("No file loaded")
+        self.status_label.setText("")
+        self.counter_label.setText("0 / 0")
+        self.image_label.clear()
+        self.image_label.setText("No image loaded")
+        self.current_pixmap = None
+    
+    def _get_exif_orientation(self, image_path: Path) -> int:
+        """Get EXIF orientation value quickly without loading full image."""
+        try:
+            from PIL import Image
+            
+            with Image.open(image_path) as img:
+                exif = img.getexif()
+                if exif is not None:
+                    # Orientation tag is 274 in EXIF
+                    return exif.get(274, 1)
+        except:
+            pass
+        return 1  # Default orientation (no rotation)
+    
+    def _apply_orientation_transform(self, pixmap: QPixmap, orientation: int) -> QPixmap:
+        """Apply rotation transform based on EXIF orientation."""
+        if orientation == 1:
+            return pixmap  # No rotation needed
+        
+        transform = QTransform()
+        
+        if orientation == 3:
+            transform.rotate(180)
+        elif orientation == 6:
+            transform.rotate(90)
+        elif orientation == 8:
+            transform.rotate(-90)
+        elif orientation == 2:
+            transform.scale(-1, 1)  # Horizontal flip
+        elif orientation == 4:
+            transform.scale(1, -1)  # Vertical flip
+        elif orientation == 5:
+            transform.rotate(90)
+            transform.scale(-1, 1)
+        elif orientation == 7:
+            transform.rotate(-90)
+            transform.scale(-1, 1)
+        
+        return pixmap.transformed(transform, Qt.TransformationMode.SmoothTransformation)
+    
+    def _load_image(self, image_path: Path):
+        """Load and display an image with optimized caching and orientation."""
+        # Check cache first
+        cache_key = str(image_path)
+        if cache_key in self.image_cache:
+            self.current_pixmap = self.image_cache[cache_key]
+            self._update_image_display()
+            return
+        
+        try:
+            # Load image directly with QPixmap (fastest method)
+            pixmap = QPixmap(str(image_path))
+            
+            if pixmap.isNull():
+                raise Exception("Failed to load image with QPixmap")
+            
+            # Check if we need orientation correction (only for JPEG files)
+            if image_path.suffix.lower() in ['.jpg', '.jpeg']:
+                orientation = self._get_exif_orientation(image_path)
+                if orientation != 1:
+                    pixmap = self._apply_orientation_transform(pixmap, orientation)
+            
+            self.current_pixmap = pixmap
+            
+            # Add to cache (remove oldest if cache is full)
+            if len(self.image_cache) >= self.cache_size_limit:
+                # Remove oldest entry
+                oldest_key = next(iter(self.image_cache))
+                del self.image_cache[oldest_key]
+            
+            self.image_cache[cache_key] = pixmap
+            self._update_image_display()
+            
+        except Exception as e:
+            # Fallback to PIL method for problematic files
+            try:
+                with Image.open(image_path) as img:
+                    # Use PIL's exif_transpose for complex cases
+                    img = ImageOps.exif_transpose(img)
+                    
+                    if img.mode not in ('RGB', 'RGBA'):
+                        img = img.convert('RGB')
+                    
+                    # Convert to QPixmap more efficiently
+                    from io import BytesIO
+                    temp_buffer = BytesIO()
+                    img.save(temp_buffer, format='PNG', optimize=True)
+                    temp_buffer.seek(0)
+                    
+                    pixmap = QPixmap()
+                    if pixmap.loadFromData(temp_buffer.getvalue()):
+                        self.current_pixmap = pixmap
+                        # Cache the result
+                        if len(self.image_cache) >= self.cache_size_limit:
+                            oldest_key = next(iter(self.image_cache))
+                            del self.image_cache[oldest_key]
+                        self.image_cache[cache_key] = pixmap
+                        self._update_image_display()
+                    else:
+                        raise Exception("Failed to convert PIL image to QPixmap")
+                        
+            except Exception as fallback_error:
+                self.image_label.setText(f"Error loading image: {str(e)}")
+                self.current_pixmap = None
+    
+    def _update_image_display(self):
+        """Update the image display with proper scaling."""
+        if self.current_pixmap:
+            # Scale image to fit the label while maintaining aspect ratio
+            scaled_pixmap = self.current_pixmap.scaled(
+                self.image_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.image_label.setPixmap(scaled_pixmap)
+    
+    def _delayed_image_update(self):
+        """Delayed image update to prevent too frequent resizing."""
+        self._update_image_display()
+    
+    def resizeEvent(self, event):
+        """Handle window resize events."""
+        super().resizeEvent(event)
+        if self.current_pixmap:
+            self.resize_timer.start(100)  # Delay 100ms before updating
+    
+    def _update_button_states(self):
+        """Update button enabled/disabled states."""
+        photo = self.photo_manager.get_current_photo()
+        has_photos = photo is not None
+        
+        # Action buttons
+        self.keep_all_btn.setEnabled(has_photos)
+        self.delete_raw_btn.setEnabled(has_photos and photo.has_raw if photo else False)
+        self.delete_all_btn.setEnabled(has_photos)
+        
+        # Navigation buttons
+        current, total = self.photo_manager.get_photo_count()
+        self.prev_btn.setEnabled(current > 1)
+        self.next_btn.setEnabled(current < total)
+    
+    def _keep_all_files(self):
+        """Keep all files for current photo."""
+        photo = self.photo_manager.get_current_photo()
+        if photo:
+            self.photo_manager.keep_both_files(photo)
+            self._next_photo()
+    
+    def _delete_raw_file(self):
+        """Delete RAW file for current photo."""
+        photo = self.photo_manager.get_current_photo()
+        if not photo or not photo.has_raw:
+            return
+        
+        if self._confirm_deletion(f"Delete RAW file for {photo.base_name}?"):
+            if self.photo_manager.delete_raw_only(photo):
+                self._next_photo()
+    
+    def _delete_all_files(self):
+        """Delete all files for current photo."""
+        photo = self.photo_manager.get_current_photo()
+        if not photo:
+            return
+        
+        if self._confirm_deletion(f"Delete ALL files for {photo.base_name}?"):
+            if self.photo_manager.delete_both_files(photo):
+                self.photo_manager.remove_current_photo_from_list()
+                self._update_display()
+                self._update_button_states()
+    
+    def _confirm_deletion(self, message: str) -> bool:
+        """Show confirmation dialog if enabled."""
+        if not self.confirm_deletions:
+            return True
+        
+        reply = QMessageBox.question(
+            self,
+            "Confirm Deletion",
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        return reply == QMessageBox.StandardButton.Yes
+    
+    def _next_photo(self):
+        """Move to next photo."""
+        if self.photo_manager.move_to_next():
+            self._update_display()
+            self._update_button_states()
+    
+    def _previous_photo(self):
+        """Move to previous photo."""
+        if self.photo_manager.move_to_previous():
+            self._update_display()
+            self._update_button_states()
+    
+    def _toggle_confirmation(self):
+        """Toggle deletion confirmation setting."""
+        self.confirm_deletions = self.confirm_action.isChecked()
+    
+    def _clear_image_cache(self):
+        """Clear the image cache to free memory."""
+        self.image_cache.clear()
+    
+    def _preload_adjacent_images(self):
+        """Preload next and previous images for faster navigation."""
+        current_photo = self.photo_manager.get_current_photo()
+        if not current_photo:
+            return
+        
+        # Preload next image
+        if self.photo_manager.current_index < len(self.photo_manager.photo_pairs) - 1:
+            next_photo = self.photo_manager.photo_pairs[self.photo_manager.current_index + 1]
+            if next_photo.display_path:
+                self._preload_image(next_photo.display_path)
+        
+        # Preload previous image
+        if self.photo_manager.current_index > 0:
+            prev_photo = self.photo_manager.photo_pairs[self.photo_manager.current_index - 1]
+            if prev_photo.display_path:
+                self._preload_image(prev_photo.display_path)
+    
+    def _preload_image(self, image_path: Path):
+        """Preload an image into cache without displaying it."""
+        cache_key = str(image_path)
+        if cache_key in self.image_cache:
+            return  # Already cached
+        
+        try:
+            # Load quickly in background
+            pixmap = QPixmap(str(image_path))
+            if not pixmap.isNull():
+                # Apply orientation if needed
+                if image_path.suffix.lower() in ['.jpg', '.jpeg']:
+                    orientation = self._get_exif_orientation(image_path)
+                    if orientation != 1:
+                        pixmap = self._apply_orientation_transform(pixmap, orientation)
+                
+                # Add to cache if there's space
+                if len(self.image_cache) < self.cache_size_limit:
+                    self.image_cache[cache_key] = pixmap
+        except:
+            pass  # Ignore preload errors

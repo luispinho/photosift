@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "label": "Run Quick Culling",
+            "type": "shell",
+            "command": "/opt/homebrew/bin/python3",
+            "args": [
+                "main.py"
+            ],
+            "group": "build",
+            "isBackground": false,
+            "problemMatcher": []
+        }
+    ]
+}
