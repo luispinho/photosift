@@ -3,16 +3,17 @@ Main Window - The primary UI for the photo culling application
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QFileDialog, QMessageBox,
-    QMenuBar, QMenu, QStatusBar, QFrame, QSizePolicy
+    QMenuBar, QMenu, QStatusBar, QFrame, QSizePolicy, QApplication
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal, QUrl
-from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal, QUrl, QSize
+from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent, QIcon
 from PIL import Image, ImageOps
 
 from .photo_manager import PhotoManager, PhotoPair
@@ -130,6 +131,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PhotoSift - Photo Management Tool")
         self.setMinimumSize(800, 600)
         self.resize(1200, 800)
+        
+        # Set application icon
+        self._set_app_icon()
         
         # Central widget
         central_widget = QWidget()
@@ -630,3 +634,70 @@ class MainWindow(QMainWindow):
     def _on_folder_dropped(self, folder_path: str):
         """Handle folder dropped onto the image area."""
         self.photo_manager.load_folder(folder_path)
+    
+    def _set_app_icon(self):
+        """Set the application icon with proper multi-platform support."""
+        assets_dir = Path(__file__).parent.parent / "assets"
+        
+        try:
+            # Try platform-specific icon formats first
+            if sys.platform == "darwin":  # macOS
+                # Use the .icns file for best quality on macOS
+                icns_path = assets_dir / "PhotoSift.icns"
+                if icns_path.exists():
+                    icon = QIcon(str(icns_path))
+                    if not icon.isNull():
+                        self.setWindowIcon(icon)
+                        app = QApplication.instance()
+                        if app:
+                            app.setWindowIcon(icon)
+                        return
+                
+                # Fallback to individual PNG files for macOS
+                icon = QIcon()
+                for size in [16, 32, 64, 128, 256, 512]:
+                    png_path = assets_dir / f"icon-{size}.png"
+                    if png_path.exists():
+                        icon.addFile(str(png_path), QSize(size, size))
+                
+                if not icon.isNull():
+                    self.setWindowIcon(icon)
+                    app = QApplication.instance()
+                    if app:
+                        app.setWindowIcon(icon)
+                    return
+            
+            else:  # Windows, Linux, and other platforms
+                # Use individual PNG files for better control
+                icon = QIcon()
+                
+                if sys.platform == "win32":  # Windows
+                    sizes = [16, 20, 24, 32, 48, 64, 128, 256]
+                else:  # Linux and others
+                    sizes = [16, 24, 32, 48, 64, 128, 256]
+                
+                for size in sizes:
+                    png_path = assets_dir / f"icon-{size}.png"
+                    if png_path.exists():
+                        icon.addFile(str(png_path), QSize(size, size))
+                
+                if not icon.isNull():
+                    self.setWindowIcon(icon)
+                    app = QApplication.instance()
+                    if app:
+                        app.setWindowIcon(icon)
+                    return
+            
+            # Final fallback to the original 512px icon
+            fallback_path = assets_dir / "icon-512.png"
+            if fallback_path.exists():
+                icon = QIcon(str(fallback_path))
+                if not icon.isNull():
+                    self.setWindowIcon(icon)
+                    app = QApplication.instance()
+                    if app:
+                        app.setWindowIcon(icon)
+                        
+        except Exception as e:
+            # Silent fallback - don't show errors for missing icons
+            pass
