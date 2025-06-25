@@ -1,5 +1,8 @@
 # PhotoSift - Photo Management Tool
 
+<img src="assets/icon-128.png" align="right"
+     alt="Size Limit logo by Anton Lovchikov" width="128" height="128">
+
 A fast and lightweight photo management application for Canon DSLR files, designed to help photographers quickly cull through their photos and decide which files to keep or delete.
 
 ## Features
@@ -61,4 +64,4 @@ photosift/
 
 ## License
 
-MIT License - See LICENSE file for details
+GNU General Public License v3.0 - See LICENSE file for details
