@@ -13,10 +13,102 @@ from PyQt6.QtWidgets import (
     QMenuBar, QMenu, QStatusBar, QFrame, QSizePolicy, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal, QUrl, QSize
-from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent, QIcon
+from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent, QIcon, QPainter, QFont, QColor
 from PIL import Image, ImageOps
 
 from .photo_manager import PhotoManager, PhotoPair
+
+
+class FileStatusWidget(QWidget):
+    """Modern visual file status indicator showing JPEG and RAW presence."""
+    
+    def __init__(self):
+        super().__init__()
+        self.has_jpeg = False
+        self.has_raw = False
+        self.setFixedSize(140, 32)
+        self.setStyleSheet("background: transparent;")
+        self.setToolTip("File format indicators")
+    
+    def update_status(self, has_jpeg: bool, has_raw: bool):
+        """Update the file status and trigger a repaint."""
+        self.has_jpeg = has_jpeg
+        self.has_raw = has_raw
+        self.update()  # Trigger paintEvent
+        
+        # Update tooltip based on current status
+        if has_jpeg and has_raw:
+            self.setToolTip("Both JPEG and RAW files present")
+        elif has_jpeg:
+            self.setToolTip("JPEG file only")
+        elif has_raw:
+            self.setToolTip("RAW file only")
+        else:
+            self.setToolTip("No files present")
+    
+    def paintEvent(self, event):
+        """Custom paint event to draw the file status indicators."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Set font
+        font = QFont()
+        font.setPointSize(9)
+        font.setWeight(QFont.Weight.DemiBold)
+        painter.setFont(font)
+        
+        # Calculate dimensions
+        spacing = 4
+        indicator_width = (self.width() - spacing) // 2
+        indicator_height = self.height()
+        
+        # JPEG indicator
+        jpeg_rect = self.rect().adjusted(0, 0, -indicator_width - spacing, 0)
+        if self.has_jpeg:
+            # Active state - filled with modern green and subtle shadow
+            # First draw a subtle shadow/glow
+            shadow_rect = jpeg_rect.adjusted(-1, 1, 1, 1)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(16, 185, 129, 30))  # Semi-transparent green
+            painter.drawRoundedRect(shadow_rect, 6, 6)
+            
+            # Then draw the main indicator
+            painter.setBrush(QColor("#10b981"))  # Emerald green
+            painter.drawRoundedRect(jpeg_rect, 6, 6)
+            painter.setPen(QColor("#ffffff"))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        else:
+            # Inactive state - subtle outline with darker background
+            painter.setPen(QColor("#404040"))
+            painter.setBrush(QColor("#252525"))  # Darker background
+            painter.drawRoundedRect(jpeg_rect, 6, 6)
+            painter.setPen(QColor("#606060"))
+        
+        painter.drawText(jpeg_rect, Qt.AlignmentFlag.AlignCenter, "JPEG")
+        
+        # RAW indicator
+        raw_rect = self.rect().adjusted(indicator_width + spacing, 0, 0, 0)
+        if self.has_raw:
+            # Active state - filled with modern amber and subtle shadow
+            # First draw a subtle shadow/glow
+            shadow_rect = raw_rect.adjusted(-1, 1, 1, 1)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(245, 158, 11, 30))  # Semi-transparent amber
+            painter.drawRoundedRect(shadow_rect, 6, 6)
+            
+            # Then draw the main indicator
+            painter.setBrush(QColor("#f59e0b"))  # Amber
+            painter.drawRoundedRect(raw_rect, 6, 6)
+            painter.setPen(QColor("#ffffff"))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+        else:
+            # Inactive state - subtle outline with darker background
+            painter.setPen(QColor("#404040"))
+            painter.setBrush(QColor("#252525"))  # Darker background
+            painter.drawRoundedRect(raw_rect, 6, 6)
+            painter.setPen(QColor("#606060"))
+        
+        painter.drawText(raw_rect, Qt.AlignmentFlag.AlignCenter, "RAW")
 
 
 class ImageLabel(QLabel):
@@ -191,35 +283,49 @@ class MainWindow(QMainWindow):
         # Create menu bar
         self._create_menu_bar()
         
-        # Photo info panel
-        info_layout = QHBoxLayout()
+        # Photo info panel with modern styling
+        info_panel = QFrame()
+        info_panel.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
+        info_layout = QHBoxLayout(info_panel)
+        info_layout.setContentsMargins(12, 8, 12, 8)
         
         # File name label
         self.filename_label = QLabel("No file loaded")
-        self.filename_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #e0e0e0;")
+        self.filename_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #e0e0e0; background: transparent; border: none;")
         info_layout.addWidget(self.filename_label)
         
         info_layout.addStretch()
         
-        # File status label
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("font-size: 12px; color: #a0a0a0;")
-        info_layout.addWidget(self.status_label)
+        # File status widget (modern visual indicator)
+        self.file_status_widget = FileStatusWidget()
+        info_layout.addWidget(self.file_status_widget)
         
-        # Photo counter
-        self.counter_label = QLabel("0 / 0")
-        self.counter_label.setStyleSheet("font-size: 12px; color: #a0a0a0;")
-        info_layout.addWidget(self.counter_label)
-        
-        main_layout.addLayout(info_layout)
+        main_layout.addWidget(info_panel)
         
         # Image display area
         self.image_label = ImageLabel()
         main_layout.addWidget(self.image_label)
         
-        # Action buttons
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(15)
+        # Action buttons with improved spacing and grouping
+        button_container = QFrame()
+        button_container.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 4px;
+            }
+        """)
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setSpacing(12)
+        button_layout.setContentsMargins(12, 8, 12, 8)
         
         # Keep all button
         self.keep_all_btn = QPushButton("Keep All (K)")
@@ -299,10 +405,20 @@ class MainWindow(QMainWindow):
         self.delete_all_btn.clicked.connect(self._delete_all_files)
         button_layout.addWidget(self.delete_all_btn)
         
-        main_layout.addLayout(button_layout)
+        main_layout.addWidget(button_container)
         
-        # Navigation buttons
-        nav_layout = QHBoxLayout()
+        # Navigation buttons with modern container
+        nav_container = QFrame()
+        nav_container.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 4px;
+            }
+        """)
+        nav_layout = QHBoxLayout(nav_container)
+        nav_layout.setContentsMargins(12, 8, 12, 8)
         
         self.prev_btn = QPushButton("← Previous")
         self.prev_btn.setStyleSheet("""
@@ -331,7 +447,18 @@ class MainWindow(QMainWindow):
         self.prev_btn.clicked.connect(self._previous_photo)
         nav_layout.addWidget(self.prev_btn)
         
-        nav_layout.addStretch()
+        # Photo counter in the center of navigation
+        self.counter_label = QLabel("0 / 0")
+        self.counter_label.setStyleSheet("""
+            font-size: 14px; 
+            font-weight: 600; 
+            color: #e0e0e0; 
+            background: transparent; 
+            border: none;
+            padding: 8px 16px;
+        """)
+        self.counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        nav_layout.addWidget(self.counter_label)
         
         self.next_btn = QPushButton("Next →")
         self.next_btn.setStyleSheet("""
@@ -360,7 +487,7 @@ class MainWindow(QMainWindow):
         self.next_btn.clicked.connect(self._next_photo)
         nav_layout.addWidget(self.next_btn)
         
-        main_layout.addLayout(nav_layout)
+        main_layout.addWidget(nav_container)
         
         # Status bar
         self.status_bar = QStatusBar()
@@ -418,7 +545,6 @@ class MainWindow(QMainWindow):
         
         # Connect drag & drop signal
         self.image_label.folder_dropped.connect(self._on_folder_dropped)
-    
     def _open_folder(self):
         """Open folder dialog and load photos."""
         folder = QFileDialog.getExistingDirectory(
@@ -464,8 +590,8 @@ class MainWindow(QMainWindow):
             # Update filename
             self.filename_label.setText(photo.base_name)
             
-            # Update status
-            self.status_label.setText(photo.file_status)
+            # Update file status widget
+            self.file_status_widget.update_status(photo.has_jpeg, photo.has_raw)
             
             # Update counter
             current, total = self.photo_manager.get_photo_count()
@@ -482,7 +608,7 @@ class MainWindow(QMainWindow):
     def _clear_display(self):
         """Clear the display when no photo is available."""
         self.filename_label.setText("No file loaded")
-        self.status_label.setText("")
+        self.file_status_widget.update_status(False, False)
         self.counter_label.setText("0 / 0")
         self.image_label.clear()
         self.image_label.setText("No image loaded")
