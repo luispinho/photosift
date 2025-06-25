@@ -28,16 +28,15 @@ class ImageLabel(QLabel):
     def __init__(self):
         super().__init__()
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet("background-color: #2b2b2b; border: 1px solid #555;")
         self.setMinimumSize(400, 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setText("No image loaded\n\nDrag & drop a folder here to open it")
         self.setStyleSheet("""
             QLabel {
-                background-color: #2b2b2b;
-                border: 2px solid #555;
-                border-radius: 8px;
-                color: #888;
+                background-color: #1e1e1e;
+                border: 2px solid #404040;
+                border-radius: 12px;
+                color: #a0a0a0;
                 font-size: 16px;
             }
         """)
@@ -57,10 +56,10 @@ class ImageLabel(QLabel):
                         # Change appearance to indicate drop is accepted
                         self.setStyleSheet("""
                             QLabel {
-                                background-color: #3a3a3a;
-                                border: 2px solid #4CAF50;
-                                border-radius: 8px;
-                                color: #4CAF50;
+                                background-color: #252525;
+                                border: 2px solid #10b981;
+                                border-radius: 12px;
+                                color: #10b981;
                                 font-size: 16px;
                             }
                         """)
@@ -72,10 +71,10 @@ class ImageLabel(QLabel):
         # Restore normal appearance
         self.setStyleSheet("""
             QLabel {
-                background-color: #2b2b2b;
-                border: 2px solid #555;
-                border-radius: 8px;
-                color: #888;
+                background-color: #1e1e1e;
+                border: 2px solid #404040;
+                border-radius: 12px;
+                color: #a0a0a0;
                 font-size: 16px;
             }
         """)
@@ -85,10 +84,10 @@ class ImageLabel(QLabel):
         # Restore normal appearance
         self.setStyleSheet("""
             QLabel {
-                background-color: #2b2b2b;
-                border: 2px solid #555;
-                border-radius: 8px;
-                color: #888;
+                background-color: #1e1e1e;
+                border: 2px solid #404040;
+                border-radius: 12px;
+                color: #a0a0a0;
                 font-size: 16px;
             }
         """)
@@ -132,6 +131,51 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(800, 600)
         self.resize(1200, 800)
         
+        # Set modern dark theme
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #181818;
+                color: #e0e0e0;
+            }
+            QWidget {
+                background-color: #181818;
+                color: #e0e0e0;
+            }
+            QMenuBar {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border-bottom: 1px solid #404040;
+                padding: 4px;
+            }
+            QMenuBar::item {
+                background-color: transparent;
+                padding: 6px 12px;
+                border-radius: 6px;
+            }
+            QMenuBar::item:selected {
+                background-color: #2a2a2a;
+            }
+            QMenu {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 8px 16px;
+                border-radius: 6px;
+            }
+            QMenu::item:selected {
+                background-color: #2a2a2a;
+            }
+            QStatusBar {
+                background-color: #1e1e1e;
+                color: #a0a0a0;
+                border-top: 1px solid #404040;
+            }
+        """)
+        
         # Set application icon
         self._set_app_icon()
         
@@ -152,19 +196,19 @@ class MainWindow(QMainWindow):
         
         # File name label
         self.filename_label = QLabel("No file loaded")
-        self.filename_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.filename_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #e0e0e0;")
         info_layout.addWidget(self.filename_label)
         
         info_layout.addStretch()
         
         # File status label
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("font-size: 12px; color: #666;")
+        self.status_label.setStyleSheet("font-size: 12px; color: #a0a0a0;")
         info_layout.addWidget(self.status_label)
         
         # Photo counter
         self.counter_label = QLabel("0 / 0")
-        self.counter_label.setStyleSheet("font-size: 12px; color: #666;")
+        self.counter_label.setStyleSheet("font-size: 12px; color: #a0a0a0;")
         info_layout.addWidget(self.counter_label)
         
         main_layout.addLayout(info_layout)
@@ -181,19 +225,23 @@ class MainWindow(QMainWindow):
         self.keep_all_btn = QPushButton("Keep All (K)")
         self.keep_all_btn.setStyleSheet("""
             QPushButton {
-                background-color: #4CAF50;
+                background-color: #10b981;
                 color: white;
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: 600;
                 padding: 12px 24px;
                 border: none;
-                border-radius: 6px;
+                border-radius: 8px;
             }
             QPushButton:hover {
-                background-color: #45a049;
+                background-color: #059669;
             }
             QPushButton:pressed {
-                background-color: #3d8b40;
+                background-color: #047857;
+            }
+            QPushButton:disabled {
+                background-color: #404040;
+                color: #808080;
             }
         """)
         self.keep_all_btn.clicked.connect(self._keep_all_files)
@@ -203,19 +251,23 @@ class MainWindow(QMainWindow):
         self.delete_raw_btn = QPushButton("Delete RAW (R)")
         self.delete_raw_btn.setStyleSheet("""
             QPushButton {
-                background-color: #FF9800;
+                background-color: #f59e0b;
                 color: white;
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: 600;
                 padding: 12px 24px;
                 border: none;
-                border-radius: 6px;
+                border-radius: 8px;
             }
             QPushButton:hover {
-                background-color: #f57c00;
+                background-color: #d97706;
             }
             QPushButton:pressed {
-                background-color: #ef6c00;
+                background-color: #b45309;
+            }
+            QPushButton:disabled {
+                background-color: #404040;
+                color: #808080;
             }
         """)
         self.delete_raw_btn.clicked.connect(self._delete_raw_file)
@@ -225,19 +277,23 @@ class MainWindow(QMainWindow):
         self.delete_all_btn = QPushButton("Delete All (D)")
         self.delete_all_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f44336;
+                background-color: #ef4444;
                 color: white;
                 font-size: 14px;
-                font-weight: bold;
+                font-weight: 600;
                 padding: 12px 24px;
                 border: none;
-                border-radius: 6px;
+                border-radius: 8px;
             }
             QPushButton:hover {
-                background-color: #da190b;
+                background-color: #dc2626;
             }
             QPushButton:pressed {
-                background-color: #d01716;
+                background-color: #b91c1c;
+            }
+            QPushButton:disabled {
+                background-color: #404040;
+                color: #808080;
             }
         """)
         self.delete_all_btn.clicked.connect(self._delete_all_files)
@@ -249,12 +305,58 @@ class MainWindow(QMainWindow):
         nav_layout = QHBoxLayout()
         
         self.prev_btn = QPushButton("← Previous")
+        self.prev_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #e0e0e0;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 10px 20px;
+                border: 1px solid #4b5563;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+            QPushButton:pressed {
+                background-color: #374151;
+            }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #606060;
+                border-color: #404040;
+            }
+        """)
         self.prev_btn.clicked.connect(self._previous_photo)
         nav_layout.addWidget(self.prev_btn)
         
         nav_layout.addStretch()
         
         self.next_btn = QPushButton("Next →")
+        self.next_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #e0e0e0;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 10px 20px;
+                border: 1px solid #4b5563;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+            QPushButton:pressed {
+                background-color: #374151;
+            }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #606060;
+                border-color: #404040;
+            }
+        """)
         self.next_btn.clicked.connect(self._next_photo)
         nav_layout.addWidget(self.next_btn)
         
