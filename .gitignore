@@ -199,3 +199,6 @@ secrets.json
 *.backup
 *.bak
 *~
+
+# Test photos session files
+test_photos/.*
