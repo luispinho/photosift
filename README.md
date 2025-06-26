@@ -1,67 +1,57 @@
 # PhotoSift - Photo Management Tool
 
 <img src="assets/icon-128.png" align="right"
-     alt="Size Limit logo by Anton Lovchikov" width="128" height="128">
+     alt="PhotoSift logo" width="128" height="128">
 
-A fast and lightweight photo management application for Canon DSLR files, designed to help photographers quickly cull through their photos and decide which files to keep or delete.
+A fast and lightweight photo culling application for Canon DSLR files, designed to help photographers quickly sort through their photos and decide which files to keep, delete, or process further.
 
-## Features
+## Motivation
 
-- Preview JPEG images from Canon DSLR cameras
-- Handle both JPEG and CR2 (RAW) files
-- Quick keyboard shortcuts for file management:
-  - `K` - Keep both JPEG and RAW files
-  - `R` - Delete RAW file, keep JPEG
-  - `D` - Delete both files
-- File counter showing current position and total files
-- Automatic progression to next file after action
-- Confirmation dialogs for file deletion (configurable)
-- Clean, intuitive interface optimized for macOS
+Most existing photo management solutions feel overcomplicated for the simple task of culling photos after a shoot. They often require importing photos into catalogs, navigating complex interfaces, or switching between multiple tools. PhotoSift was created to solve this specific workflow pain point with a single-purpose, lightning-fast application that lets you:
 
-## Requirements
+- **Skip the import process** - Work directly with your files without catalog overhead
+- **Make decisions quickly** - Simple keyboard shortcuts and immediate visual feedback
+- **Stay focused** - No distracting features, just the essentials for photo culling
+- **Work efficiently** - Smart confirmation system with undo capabilities for safety without friction
 
-- Python 3.8 or higher
-- PyQt6
-- Pillow (PIL)
+PhotoSift is for photographers who want to get through the initial culling process as quickly as possible and move on to the creative work that matters.
 
-## Installation
+## Screenshot
 
-1. Clone this repository
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+<img src="assets/screenshot-1.png" alt="PhotoSift in action - showing the modern dark interface with photo preview, action buttons, and status indicators" width="100%">
 
-## Usage
+*PhotoSift's clean, keyboard-driven interface designed for fast photo culling*
 
-1. Run the application:
-   ```bash
-   python main.py
-   ```
+## Quick Start
 
-2. Open a folder containing your Canon DSLR photos
-3. Use keyboard shortcuts or click buttons to manage your photos
+```bash
+# Clone and install
+git clone https://github.com/yourusername/photosift.git
+cd photosift
+pip install -r requirements.txt
 
-## Tech Stack
-
-- **Python** - Core application logic
-- **PyQt6** - GUI framework for native macOS interface
-- **Pillow** - Image processing and preview generation
-
-## Project Structure
-
+# Run PhotoSift
+python main.py
 ```
-photosift/
-├── main.py              # Application entry point
-├── src/
-│   ├── __init__.py
-│   ├── main_window.py   # Main application window
-│   ├── photo_manager.py # Photo file management logic
-│   └── preferences.py   # Settings and preferences
-├── requirements.txt     # Python dependencies
-└── README.md           # This file
-```
+
+Open a folder (`Ctrl+O`) and start culling with keyboard shortcuts:
+- `K` - Keep all files
+- `R` - Delete RAW, keep JPEG
+- `D` - Delete all files
+- `S` - Skip this photo
+
+## Documentation
+
+- 📋 [Features](docs/features.md) - Complete feature list and capabilities
+- 🚀 [Getting Started](docs/getting-started.md) - Detailed installation and setup
+- ⚡ [Workflow](docs/workflow.md) - Optimized culling workflow and smart confirmation system
+- 🔧 [Architecture](docs/architecture.md) - Technical details and project structure
+- 🤝 [Contributing](docs/contributing.md) - How to contribute to PhotoSift
 
 ## License
 
 GNU General Public License v3.0 - See LICENSE file for details
+
+---
+
+*Built by photographers, for photographers. Happy culling! 📸*

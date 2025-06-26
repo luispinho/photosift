@@ -33,10 +33,10 @@ class PendingAction:
 
 class CountdownWidget(QWidget):
     """Compact countdown widget integrated into status bar area with progress and undo."""
-    
+
     action_confirmed = pyqtSignal()  # Emitted when countdown finishes
     action_cancelled = pyqtSignal()  # Emitted when user cancels
-    
+
     def __init__(self):
         super().__init__()
         self.countdown_seconds = 5
@@ -45,21 +45,21 @@ class CountdownWidget(QWidget):
         self.timer.timeout.connect(self._update_countdown)
         self.pending_action = None
         self.action_color = "#6b7280"
-        
+
         # Compact design for status bar integration
         self.setFixedHeight(32)  # Reduced height to fit better in status bar
         self.setMinimumWidth(280)  # More compact minimum width
         self.setMaximumWidth(420)  # More compact maximum width
         self._setup_ui()
         self.hide()  # Initially hidden
-    
+
     def _setup_ui(self):
         """Set up the compact countdown widget UI."""
         # Main horizontal layout
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)  # Reduced margins for status bar
         layout.setSpacing(8)  # Tighter spacing between elements
-        
+
         # Description label with better sizing
         self.description_label = QLabel()
         self.description_label.setStyleSheet("""
@@ -74,13 +74,13 @@ class CountdownWidget(QWidget):
         """)
         self.description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(self.description_label)
-        
+
         # Progress container with proper sizing
         self.progress_container = QFrame()
         self.progress_container.setFixedSize(100, 22)  # More compact width
         self.progress_container.setStyleSheet("background: transparent;")
         layout.addWidget(self.progress_container)
-        
+
         # Compact undo button
         self.undo_btn = QPushButton("Undo")
         self.undo_btn.setFixedSize(55, 22)  # Smaller to fit status bar
@@ -104,23 +104,23 @@ class CountdownWidget(QWidget):
         """)
         self.undo_btn.clicked.connect(self._cancel_action)
         layout.addWidget(self.undo_btn)
-    
+
     def start_countdown(self, pending_action: PendingAction):
         """Start the countdown for a pending action."""
         self.pending_action = pending_action
         self.remaining_time = self.countdown_seconds
         self.description_label.setText(pending_action.description)
-        
+
         # Set action color based on action type
         action_colors = {
             "delete_raw": "#f59e0b",  # Amber
-            "delete_all": "#ef4444", # Red  
+            "delete_all": "#ef4444", # Red
             "keep_all": "#10b981",   # Green
             "skip": "#6b7280"        # Gray
         }
-        
+
         self.action_color = action_colors.get(pending_action.action_type, "#6b7280")
-        
+
         # Modern styling that matches the app theme
         self.setStyleSheet(f"""
             CountdownWidget {{
@@ -130,7 +130,7 @@ class CountdownWidget(QWidget):
                 margin: 2px;
             }}
         """)
-        
+
         # Update undo button color to match action
         self.undo_btn.setStyleSheet(f"""
             QPushButton {{
@@ -150,74 +150,74 @@ class CountdownWidget(QWidget):
                 background-color: {self.action_color}99;
             }}
         """)
-        
+
         self.show()
         self.timer.start(50)  # Update every 50ms for smoother animation
-        
+
     def _update_countdown(self):
         """Update the countdown timer and progress bar."""
         self.remaining_time -= 0.05  # Smoother decrement
-        
+
         if self.remaining_time <= 0:
             self._confirm_action()
         else:
             self.update()  # Trigger repaint for progress bar
-    
+
     def _confirm_action(self):
         """Confirm the pending action."""
         self.timer.stop()
         self.hide()
         self.action_confirmed.emit()
-    
+
     def _cancel_action(self):
         """Cancel the pending action."""
         self.timer.stop()
         self.hide()
         self.action_cancelled.emit()
-    
+
     def paintEvent(self, event):
         """Custom paint event for the smooth progress bar."""
         super().paintEvent(event)
-        
+
         if not self.pending_action or self.remaining_time <= 0:
             return
-            
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
+
         # Get progress container geometry
         container_rect = self.progress_container.geometry()
-        
+
         # Countdown text positioned above the progress bar
         remaining_seconds = max(0, int(self.remaining_time + 0.99))  # Round up for display
         text = f"{remaining_seconds}s"
-        
+
         # Text styling with better contrast
         painter.setPen(QColor("#f0f0f0"))
         font = QFont()
         font.setPointSize(9)
         font.setWeight(QFont.Weight.Bold)
         painter.setFont(font)
-        
+
         # Position text in the top portion of the container
-        text_rect = QRect(container_rect.x(), container_rect.y(), 
+        text_rect = QRect(container_rect.x(), container_rect.y(),
                          container_rect.width(), 10)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, text)
-        
+
         # Progress bar background positioned below the text
-        bg_rect = QRect(container_rect.x(), container_rect.y() + 12, 
+        bg_rect = QRect(container_rect.x(), container_rect.y() + 12,
                        container_rect.width(), 8)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor("#3a3a3a"))  # Lighter background for better contrast
         painter.drawRoundedRect(bg_rect, 4, 4)
-        
+
         # Progress bar fill (smooth animation with gradient effect)
         progress = max(0.0, min(1.0, self.remaining_time / self.countdown_seconds))
         progress_width = int(bg_rect.width() * progress)
-        
+
         if progress_width > 0:
             progress_rect = QRect(bg_rect.x(), bg_rect.y(), progress_width, bg_rect.height())
-            
+
             # Create a subtle gradient effect
             gradient_color = QColor(self.action_color)
             painter.setBrush(gradient_color)
@@ -878,7 +878,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready - Open a folder to begin")
-        
+
         # Add countdown widget to status bar (right side)
         self.countdown_widget = CountdownWidget()
         self.status_bar.addPermanentWidget(self.countdown_widget)
@@ -921,7 +921,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("S"), self, self._skip_photo)
         QShortcut(QKeySequence("R"), self, self._delete_raw_file)
         QShortcut(QKeySequence("D"), self, self._delete_all_files)
-        
+
         # Undo shortcut
         QShortcut(QKeySequence("U"), self, self._undo_action)
         QShortcut(QKeySequence("Ctrl+Z"), self, self._undo_action)
@@ -1186,14 +1186,14 @@ class MainWindow(QMainWindow):
         photo = self.photo_manager.get_current_photo()
         if not photo:
             return
-            
+
         # Cancel any existing pending action
         if self.pending_action:
             self.countdown_widget._cancel_action()
-        
+
         # Store current index to return to if cancelled
         current_index = self.photo_manager.current_index
-        
+
         # Create pending action
         self.pending_action = PendingAction(
             action_type=action_type,
@@ -1202,41 +1202,41 @@ class MainWindow(QMainWindow):
             action_func=action_func,
             previous_index=current_index
         )
-        
+
         # Start countdown
         self.countdown_widget.start_countdown(self.pending_action)
-        
+
         # Immediately move to next photo (bypassing the pending action check)
         if self.photo_manager.move_to_next():
             self._update_display()
-        
+
         self._update_button_states()
-    
+
     def _execute_pending_action(self):
         """Execute the pending action after countdown finishes or immediately when called."""
         if not self.pending_action:
             return
-            
+
         # Stop the countdown timer and hide the widget
         self.countdown_widget.timer.stop()
         self.countdown_widget.hide()
-            
+
         # Execute the action
         self.pending_action.action_func()
-        
+
         # Clear pending action
         self.pending_action = None
         self._update_button_states()
-    
+
     def _cancel_pending_action(self):
         """Cancel the pending action and return to previous photo."""
         if not self.pending_action:
             return
-            
+
         # Return to the photo that had the pending action
         self.photo_manager.current_index = self.pending_action.previous_index
         self._update_display()
-        
+
         # Clear pending action
         self.pending_action = None
         self._update_button_states()
@@ -1248,10 +1248,10 @@ class MainWindow(QMainWindow):
             # If there's a pending action, execute it immediately before this action
             if self.pending_action:
                 self._execute_pending_action()
-            
+
             # Execute immediately - no countdown needed for non-destructive action
             self.photo_manager.keep_both_files(photo)
-            
+
             # Move to next photo
             if self.photo_manager.move_to_next():
                 self._update_display()
@@ -1264,12 +1264,12 @@ class MainWindow(QMainWindow):
             # If there's a pending action, execute it immediately before this action
             if self.pending_action:
                 self._execute_pending_action()
-            
+
             # Execute immediately - no countdown needed for non-destructive action
             photo.set_action(PhotoAction.SKIPPED)
             self.photo_manager._save_session_data()
             self.photo_manager.session_updated.emit()
-            
+
             # Move to next photo
             if self.photo_manager.move_to_next():
                 self._update_display()
@@ -1287,7 +1287,7 @@ class MainWindow(QMainWindow):
 
         def execute_delete_raw():
             self.photo_manager.delete_raw_only(photo)
-        
+
         self._start_pending_action(
             "delete_raw",
             f"Deleting RAW file for {photo.base_name}",
@@ -1309,7 +1309,7 @@ class MainWindow(QMainWindow):
                 self.photo_manager.remove_current_photo_from_list()
                 self._update_display()
                 self._update_button_states()
-        
+
         self._start_pending_action(
             "delete_all",
             f"Deleting ALL files for {photo.base_name}",
@@ -1321,7 +1321,7 @@ class MainWindow(QMainWindow):
         # Don't allow manual navigation if there's a pending action
         if self.pending_action:
             return
-            
+
         if self.photo_manager.move_to_next():
             self._update_display()
             self._update_button_states()
@@ -1331,7 +1331,7 @@ class MainWindow(QMainWindow):
         # Don't allow manual navigation if there's a pending action
         if self.pending_action:
             return
-            
+
         if self.photo_manager.move_to_previous():
             self._update_display()
             self._update_button_states()
