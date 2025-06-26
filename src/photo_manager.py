@@ -15,7 +15,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 class PhotoAction(Enum):
     """Enum for different actions taken on photos."""
     NONE = "none"
-    KEEP_ALL = "keep_all" 
+    KEEP_ALL = "keep_all"
     DELETE_RAW = "delete_raw"
     DELETE_ALL = "delete_all"
     SKIPPED = "skipped"
@@ -29,24 +29,24 @@ class PhotoPair:
     raw_path: Optional[Path] = None
     action: PhotoAction = PhotoAction.NONE
     action_timestamp: Optional[datetime] = None
-    
+
     @property
     def has_jpeg(self) -> bool:
         """Check if JPEG file exists."""
         return self.jpeg_path is not None and self.jpeg_path.exists()
-    
+
     @property
     def has_raw(self) -> bool:
         """Check if RAW file exists."""
         return self.raw_path is not None and self.raw_path.exists()
-    
+
     @property
     def display_path(self) -> Path:
         """Return the path for preview display (prefer JPEG)."""
         if self.has_jpeg:
             return self.jpeg_path
         return self.raw_path
-    
+
     @property
     def file_status(self) -> str:
         """Return status string for UI display."""
@@ -57,12 +57,12 @@ class PhotoPair:
         elif self.has_raw:
             return "RAW only"
         return "No files"
-    
+
     @property
     def has_action(self) -> bool:
         """Check if any action has been taken on this photo."""
         return self.action != PhotoAction.NONE
-    
+
     def set_action(self, action: PhotoAction):
         """Set the action taken on this photo."""
         self.action = action
@@ -71,25 +71,25 @@ class PhotoPair:
 
 class PhotoManager(QObject):
     """Manages photo files and operations."""
-    
+
     # Signals
     photos_loaded = pyqtSignal(int)  # Emits number of photos loaded
     photo_deleted = pyqtSignal(str)  # Emits photo name that was deleted
     error_occurred = pyqtSignal(str)  # Emits error message
     session_updated = pyqtSignal()  # Emits when session data changes
-    
+
     # Supported file extensions
     JPEG_EXTENSIONS = {'.jpg', '.jpeg', '.JPG', '.JPEG'}
     RAW_EXTENSIONS = {'.cr2', '.CR2', '.cr3', '.CR3'}
     SESSION_FILE = '.photosift_session.json'
-    
+
     def __init__(self):
         super().__init__()
         self.current_folder: Optional[Path] = None
         self.photo_pairs: List[PhotoPair] = []
         self.current_index = 0
         self.session_data: Dict = {}
-    
+
     def load_folder(self, folder_path: str) -> bool:
         """Load photos from a folder."""
         try:
@@ -97,83 +97,83 @@ class PhotoManager(QObject):
             if not self.current_folder.exists() or not self.current_folder.is_dir():
                 self.error_occurred.emit(f"Invalid folder: {folder_path}")
                 return False
-            
+
             # Load existing session data
             self._load_session_data()
-            
+
             # Scan for photo files
             self._scan_photos()
             self.current_index = 0
-            
+
             return True
-            
+
         except Exception as e:
             self.error_occurred.emit(f"Error loading folder: {str(e)}")
             return False
-    
+
     def _scan_photos(self):
         """Scan folder for photo files and pair them."""
         if not self.current_folder:
             return
-        
+
         # Dictionary to group files by base name
         file_groups: Dict[str, PhotoPair] = {}
-        
+
         # Scan all files in the folder
         for file_path in self.current_folder.iterdir():
             if file_path.is_file():
                 base_name = file_path.stem
                 extension = file_path.suffix
-                
+
                 # Initialize photo pair if not exists
                 if base_name not in file_groups:
                     file_groups[base_name] = PhotoPair(base_name=base_name)
-                
+
                 # Assign file to appropriate category
                 if extension in self.JPEG_EXTENSIONS:
                     file_groups[base_name].jpeg_path = file_path
                 elif extension in self.RAW_EXTENSIONS:
                     file_groups[base_name].raw_path = file_path
-        
+
         # Filter out pairs with no supported files and sort by name
         self.photo_pairs = [
             pair for pair in file_groups.values()
             if pair.has_jpeg or pair.has_raw
         ]
         self.photo_pairs.sort(key=lambda x: x.base_name.lower())
-        
+
         # Apply session data to restored photos
         self._apply_session_data()
-        
+
         # Emit signal with count
         self.photos_loaded.emit(len(self.photo_pairs))
-    
+
     def get_current_photo(self) -> Optional[PhotoPair]:
         """Get current photo pair."""
         if not self.photo_pairs or self.current_index >= len(self.photo_pairs):
             return None
         return self.photo_pairs[self.current_index]
-    
+
     def get_photo_count(self) -> Tuple[int, int]:
         """Return (current_index + 1, total_count) for display."""
         if not self.photo_pairs:
             return (0, 0)
         return (self.current_index + 1, len(self.photo_pairs))
-    
+
     def move_to_next(self) -> bool:
         """Move to next photo. Returns True if successful."""
         if self.current_index < len(self.photo_pairs) - 1:
             self.current_index += 1
             return True
         return False
-    
+
     def move_to_previous(self) -> bool:
         """Move to previous photo. Returns True if successful."""
         if self.current_index > 0:
             self.current_index -= 1
             return True
         return False
-    
+
     def delete_jpeg_only(self, photo_pair: PhotoPair) -> bool:
         """Delete only the JPEG file."""
         try:
@@ -185,7 +185,7 @@ class PhotoManager(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Error deleting JPEG: {str(e)}")
             return False
-    
+
     def delete_raw_only(self, photo_pair: PhotoPair) -> bool:
         """Delete only the RAW file."""
         try:
@@ -200,53 +200,53 @@ class PhotoManager(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Error deleting RAW: {str(e)}")
             return False
-    
+
     def delete_both_files(self, photo_pair: PhotoPair) -> bool:
         """Delete both JPEG and RAW files."""
         success = True
-        
+
         try:
             if photo_pair.has_jpeg:
                 photo_pair.jpeg_path.unlink()
                 photo_pair.jpeg_path = None
-            
+
             if photo_pair.has_raw:
                 photo_pair.raw_path.unlink()
                 photo_pair.raw_path = None
-                
+
             photo_pair.set_action(PhotoAction.DELETE_ALL)
             self._save_session_data()
             self.session_updated.emit()
-                
+
         except Exception as e:
             self.error_occurred.emit(f"Error deleting files: {str(e)}")
             success = False
-        
+
         return success
-    
+
     def keep_both_files(self, photo_pair: PhotoPair) -> bool:
         """Keep both files (mark as processed)."""
         photo_pair.set_action(PhotoAction.KEEP_ALL)
         self._save_session_data()
         self.session_updated.emit()
         return True
-    
+
     def remove_current_photo_from_list(self):
         """Remove current photo from the list after deletion."""
         if self.photo_pairs and self.current_index < len(self.photo_pairs):
             removed_photo = self.photo_pairs.pop(self.current_index)
-            
+
             # Adjust index if we're at the end
             if self.current_index >= len(self.photo_pairs) and self.photo_pairs:
                 self.current_index = len(self.photo_pairs) - 1
-            
+
             self.photo_deleted.emit(removed_photo.base_name)
-    
+
     def _load_session_data(self):
         """Load session data from JSON file."""
         session_file = self.current_folder / self.SESSION_FILE
         self.session_data = {}
-        
+
         if session_file.exists():
             try:
                 with open(session_file, 'r') as f:
@@ -254,14 +254,14 @@ class PhotoManager(QObject):
                     self.session_data = data.get('actions', {})
             except Exception as e:
                 print(f"Warning: Could not load session data: {e}")
-    
+
     def _save_session_data(self):
         """Save session data to JSON file."""
         if not self.current_folder:
             return
-            
+
         session_file = self.current_folder / self.SESSION_FILE
-        
+
         try:
             # Prepare session data
             session_info = {
@@ -270,7 +270,7 @@ class PhotoManager(QObject):
                 'last_updated': datetime.now().isoformat(),
                 'actions': {}
             }
-            
+
             # Save actions for each photo
             for photo in self.photo_pairs:
                 if photo.has_action:
@@ -278,13 +278,13 @@ class PhotoManager(QObject):
                         'action': photo.action.value,
                         'timestamp': photo.action_timestamp.isoformat() if photo.action_timestamp else None
                     }
-            
+
             with open(session_file, 'w') as f:
                 json.dump(session_info, f, indent=2)
-                
+
         except Exception as e:
             print(f"Warning: Could not save session data: {e}")
-    
+
     def _apply_session_data(self):
         """Apply loaded session data to photo pairs."""
         for photo in self.photo_pairs:
@@ -297,18 +297,18 @@ class PhotoManager(QObject):
                 except (ValueError, KeyError):
                     # Invalid action data, skip
                     pass
-    
+
     def get_session_progress(self) -> Tuple[int, int, int]:
         """Get session progress: (processed, total, percentage)."""
         if not self.photo_pairs:
             return 0, 0, 0
-            
+
         processed = sum(1 for photo in self.photo_pairs if photo.has_action)
         total = len(self.photo_pairs)
         percentage = int((processed / total) * 100) if total > 0 else 0
-        
+
         return processed, total, percentage
-    
+
     def get_action_summary(self) -> Dict[PhotoAction, int]:
         """Get summary of actions taken."""
         summary = {action: 0 for action in PhotoAction}
