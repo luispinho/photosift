@@ -225,14 +225,14 @@ class CountdownWidget(QWidget):
 
 
 class FileStatusWidget(QWidget):
-    """Modern visual file status indicator showing JPEG and RAW presence plus action status."""
+    """Simplified file status indicator showing available file formats."""
 
     def __init__(self):
         super().__init__()
         self.has_jpeg = False
         self.has_raw = False
         self.action = None
-        self.setFixedSize(140, 32)
+        self.setFixedSize(120, 28)
         self.setStyleSheet("background: transparent;")
         self.setToolTip("File format indicators")
 
@@ -246,105 +246,65 @@ class FileStatusWidget(QWidget):
         # Update tooltip based on current status
         tooltip_parts = []
         if has_jpeg and has_raw:
-            tooltip_parts.append("Both JPEG and RAW files present")
+            tooltip_parts.append("Both JPEG and RAW files available")
         elif has_jpeg:
-            tooltip_parts.append("JPEG file only")
+            tooltip_parts.append("JPEG file available")
         elif has_raw:
-            tooltip_parts.append("RAW file only")
+            tooltip_parts.append("RAW file available")
         else:
-            tooltip_parts.append("No files present")
-
-        if action and action.value != "none":
-            action_text = {
-                "keep_all": "✓ Kept all files",
-                "delete_raw": "⚠ RAW deleted",
-                "delete_all": "✗ All files deleted",
-                "skipped": "→ Skipped"
-            }.get(action.value, f"Action: {action.value}")
-            tooltip_parts.append(action_text)
+            tooltip_parts.append("No files available")
 
         self.setToolTip(" • ".join(tooltip_parts))
 
     def paintEvent(self, event):
-        """Custom paint event to draw the file status indicators."""
+        """Custom paint event to draw the file status indicator."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Set font
         font = QFont()
         font.setPointSize(9)
-        font.setWeight(QFont.Weight.DemiBold)
+        font.setWeight(QFont.Weight.Bold)
         painter.setFont(font)
 
-        # Calculate dimensions
-        spacing = 4
-        indicator_width = (self.width() - spacing) // 2
+        # Use blue color scheme for all indicators
+        blue_color = QColor("#3b82f6")  # Modern blue
+        inactive_color = QColor("#374151")  # Dark gray for unavailable
+        text_color = QColor("#ffffff")
+        inactive_text_color = QColor("#6b7280")
 
-        # Determine if this photo has been processed
-        has_action = self.action and self.action.value != "none"
-
-        # JPEG indicator
-        jpeg_rect = self.rect().adjusted(0, 0, -indicator_width - spacing, 0)
-        if self.has_jpeg:
-            # Active state - filled with modern green and subtle shadow
-            if not has_action:
-                # First draw a subtle shadow/glow
-                shadow_rect = jpeg_rect.adjusted(-1, 1, 1, 1)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QColor(16, 185, 129, 30))  # Semi-transparent green
-                painter.drawRoundedRect(shadow_rect, 6, 6)
-
-            # Choose color based on action status
-            if has_action:
-                painter.setBrush(QColor("#6b7280"))  # Muted gray for processed
-            else:
-                painter.setBrush(QColor("#10b981"))  # Emerald green for unprocessed
-
+        # Calculate positions for centered layout
+        total_width = self.width()
+        if self.has_jpeg and self.has_raw:
+            # Both available - show "JPEG + RAW"
+            rect = self.rect().adjusted(2, 2, -2, -2)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(jpeg_rect, 6, 6)
-            painter.setPen(QColor("#ffffff"))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-        else:
-            # Inactive state - subtle outline with darker background
-            painter.setPen(QColor("#404040"))
-            painter.setBrush(QColor("#252525"))  # Darker background
-            painter.drawRoundedRect(jpeg_rect, 6, 6)
-            painter.setPen(QColor("#606060"))
+            painter.setBrush(blue_color)
+            painter.drawRoundedRect(rect, 8, 8)
 
-        painter.drawText(jpeg_rect, Qt.AlignmentFlag.AlignCenter, "JPEG")
+            painter.setPen(text_color)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "JPEG + RAW")
 
-        # RAW indicator
-        raw_rect = self.rect().adjusted(indicator_width + spacing, 0, 0, 0)
-        if self.has_raw:
-            # Active state - filled with modern amber and subtle shadow
-            if not has_action:
-                # First draw a subtle shadow/glow
-                shadow_rect = raw_rect.adjusted(-1, 1, 1, 1)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QColor(245, 158, 11, 30))  # Semi-transparent amber
-                painter.drawRoundedRect(shadow_rect, 6, 6)
-
-            # Choose color based on action status and action type
-            if has_action:
-                if self.action.value == "delete_raw":
-                    painter.setBrush(QColor("#ef4444"))  # Red for deleted RAW
-                else:
-                    painter.setBrush(QColor("#6b7280"))  # Muted gray for other actions
-            else:
-                painter.setBrush(QColor("#f59e0b"))  # Amber for unprocessed
-
+        elif self.has_jpeg or self.has_raw:
+            # Single format available
+            rect = self.rect().adjusted(2, 2, -2, -2)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(raw_rect, 6, 6)
-            painter.setPen(QColor("#ffffff"))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-        else:
-            # Inactive state - subtle outline with darker background
-            painter.setPen(QColor("#404040"))
-            painter.setBrush(QColor("#252525"))  # Darker background
-            painter.drawRoundedRect(raw_rect, 6, 6)
-            painter.setPen(QColor("#606060"))
+            painter.setBrush(blue_color)
+            painter.drawRoundedRect(rect, 8, 8)
 
-        painter.drawText(raw_rect, Qt.AlignmentFlag.AlignCenter, "RAW")
+            painter.setPen(text_color)
+            text = "JPEG" if self.has_jpeg else "RAW"
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+
+        else:
+            # No files available
+            rect = self.rect().adjusted(2, 2, -2, -2)
+            painter.setPen(QColor(inactive_color))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect, 8, 8)
+
+            painter.setPen(inactive_text_color)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "NO FILES")
 
 
 class ActionIndicatorWidget(QWidget):
