@@ -41,11 +41,13 @@ class PhotoPair:
         return self.raw_path is not None and self.raw_path.exists()
 
     @property
-    def display_path(self) -> Path:
+    def display_path(self) -> Optional[Path]:
         """Return the path for preview display (prefer JPEG)."""
         if self.has_jpeg:
             return self.jpeg_path
-        return self.raw_path
+        if self.has_raw:
+            return self.raw_path
+        return None
 
     @property
     def file_status(self) -> str:
@@ -202,7 +204,7 @@ class PhotoManager(QObject):
             return False
 
     def delete_both_files(self, photo_pair: PhotoPair) -> bool:
-        """Delete both JPEG and RAW files."""
+        """Delete both JPEG and RAW files and remove from list."""
         success = True
 
         try:
@@ -215,6 +217,26 @@ class PhotoManager(QObject):
                 photo_pair.raw_path = None
 
             photo_pair.set_action(PhotoAction.DELETE_ALL)
+
+            # Remove the photo from the list immediately after deletion
+            if photo_pair in self.photo_pairs:
+                index = self.photo_pairs.index(photo_pair)
+                self.photo_pairs.remove(photo_pair)
+
+                # Adjust current index if necessary
+                if not self.photo_pairs:
+                    # List is now empty
+                    self.current_index = 0
+                elif index < self.current_index:
+                    # Removed photo was before current, decrease index
+                    self.current_index -= 1
+                elif index == self.current_index:
+                    # Removed current photo, adjust to stay in bounds
+                    if self.current_index >= len(self.photo_pairs):
+                        self.current_index = len(self.photo_pairs) - 1
+
+                self.photo_deleted.emit(photo_pair.base_name)
+
             self._save_session_data()
             self.session_updated.emit()
 
@@ -230,17 +252,6 @@ class PhotoManager(QObject):
         self._save_session_data()
         self.session_updated.emit()
         return True
-
-    def remove_current_photo_from_list(self):
-        """Remove current photo from the list after deletion."""
-        if self.photo_pairs and self.current_index < len(self.photo_pairs):
-            removed_photo = self.photo_pairs.pop(self.current_index)
-
-            # Adjust index if we're at the end
-            if self.current_index >= len(self.photo_pairs) and self.photo_pairs:
-                self.current_index = len(self.photo_pairs) - 1
-
-            self.photo_deleted.emit(removed_photo.base_name)
 
     def _load_session_data(self):
         """Load session data from JSON file."""

@@ -1019,7 +1019,14 @@ class MainWindow(QMainWindow):
             self.progress_widget.update_progress(processed, total_photos)
 
             # Load and display image
-            self._load_image(photo.display_path)
+            display_path = photo.display_path
+            if display_path:
+                self._load_image(display_path)
+            else:
+                # No files available for this photo, clear the display
+                self.image_label.clear()
+                self.image_label.setText("Files have been deleted")
+                self.current_pixmap = None
 
             # Preload adjacent images for faster navigation
             QTimer.singleShot(100, self._preload_adjacent_images)
@@ -1306,7 +1313,6 @@ class MainWindow(QMainWindow):
 
         def execute_delete_all():
             if self.photo_manager.delete_both_files(photo):
-                self.photo_manager.remove_current_photo_from_list()
                 self._update_display()
                 self._update_button_states()
 
