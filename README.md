@@ -18,7 +18,7 @@ PhotoSift is for photographers who want to get through the initial culling proce
 
 ## Screenshot
 
-<img src="assets/screenshot-1.png" alt="PhotoSift in action - showing the modern dark interface with photo preview, action buttons, and status indicators" width="100%">
+<img src="assets/screenshots/screenshot-1.png" alt="PhotoSift in action - showing the modern dark interface with photo preview, action buttons, and status indicators" width="100%">
 
 *PhotoSift's clean, keyboard-driven interface designed for fast photo culling*
 
