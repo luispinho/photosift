@@ -156,6 +156,7 @@ $RECYCLE.BIN/
 
 # PhotoSift specific
 .photosift_settings.json
+.photosift_session.json
 photosift_cache/
 .photosift_cache/
 
@@ -199,6 +200,3 @@ secrets.json
 *.backup
 *.bak
 *~
-
-# Test photos session files
-test_photos/.*

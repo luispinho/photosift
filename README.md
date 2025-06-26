@@ -26,7 +26,7 @@ PhotoSift is for photographers who want to get through the initial culling proce
 
 ```bash
 # Clone and install
-git clone https://github.com/yourusername/photosift.git
+git clone https://github.com/YOUR_USERNAME/photosift.git
 cd photosift
 pip install -r requirements.txt
 

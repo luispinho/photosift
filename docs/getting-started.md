@@ -10,7 +10,7 @@
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/photosift.git
+   git clone https://github.com/YOUR_USERNAME/photosift.git
    cd photosift
    ```
 
