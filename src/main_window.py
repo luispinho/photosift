@@ -16,35 +16,49 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSignal as Signal, 
 from PyQt6.QtGui import QPixmap, QKeySequence, QShortcut, QAction, QTransform, QDragEnterEvent, QDropEvent, QIcon, QPainter, QFont, QColor
 from PIL import Image, ImageOps
 
-from .photo_manager import PhotoManager, PhotoPair
+from .photo_manager import PhotoManager, PhotoPair, PhotoAction
 
 
 class FileStatusWidget(QWidget):
-    """Modern visual file status indicator showing JPEG and RAW presence."""
+    """Modern visual file status indicator showing JPEG and RAW presence plus action status."""
     
     def __init__(self):
         super().__init__()
         self.has_jpeg = False
         self.has_raw = False
+        self.action = None
         self.setFixedSize(140, 32)
         self.setStyleSheet("background: transparent;")
         self.setToolTip("File format indicators")
     
-    def update_status(self, has_jpeg: bool, has_raw: bool):
+    def update_status(self, has_jpeg: bool, has_raw: bool, action=None):
         """Update the file status and trigger a repaint."""
         self.has_jpeg = has_jpeg
         self.has_raw = has_raw
+        self.action = action
         self.update()  # Trigger paintEvent
         
         # Update tooltip based on current status
+        tooltip_parts = []
         if has_jpeg and has_raw:
-            self.setToolTip("Both JPEG and RAW files present")
+            tooltip_parts.append("Both JPEG and RAW files present")
         elif has_jpeg:
-            self.setToolTip("JPEG file only")
+            tooltip_parts.append("JPEG file only")
         elif has_raw:
-            self.setToolTip("RAW file only")
+            tooltip_parts.append("RAW file only")
         else:
-            self.setToolTip("No files present")
+            tooltip_parts.append("No files present")
+            
+        if action and action.value != "none":
+            action_text = {
+                "keep_all": "✓ Kept all files",
+                "delete_raw": "⚠ RAW deleted", 
+                "delete_all": "✗ All files deleted",
+                "skipped": "→ Skipped"
+            }.get(action.value, f"Action: {action.value}")
+            tooltip_parts.append(action_text)
+            
+        self.setToolTip(" • ".join(tooltip_parts))
     
     def paintEvent(self, event):
         """Custom paint event to draw the file status indicators."""
@@ -60,20 +74,28 @@ class FileStatusWidget(QWidget):
         # Calculate dimensions
         spacing = 4
         indicator_width = (self.width() - spacing) // 2
-        indicator_height = self.height()
+        
+        # Determine if this photo has been processed
+        has_action = self.action and self.action.value != "none"
         
         # JPEG indicator
         jpeg_rect = self.rect().adjusted(0, 0, -indicator_width - spacing, 0)
         if self.has_jpeg:
             # Active state - filled with modern green and subtle shadow
-            # First draw a subtle shadow/glow
-            shadow_rect = jpeg_rect.adjusted(-1, 1, 1, 1)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(16, 185, 129, 30))  # Semi-transparent green
-            painter.drawRoundedRect(shadow_rect, 6, 6)
+            if not has_action:
+                # First draw a subtle shadow/glow
+                shadow_rect = jpeg_rect.adjusted(-1, 1, 1, 1)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(16, 185, 129, 30))  # Semi-transparent green
+                painter.drawRoundedRect(shadow_rect, 6, 6)
             
-            # Then draw the main indicator
-            painter.setBrush(QColor("#10b981"))  # Emerald green
+            # Choose color based on action status
+            if has_action:
+                painter.setBrush(QColor("#6b7280"))  # Muted gray for processed
+            else:
+                painter.setBrush(QColor("#10b981"))  # Emerald green for unprocessed
+                
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(jpeg_rect, 6, 6)
             painter.setPen(QColor("#ffffff"))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -90,14 +112,23 @@ class FileStatusWidget(QWidget):
         raw_rect = self.rect().adjusted(indicator_width + spacing, 0, 0, 0)
         if self.has_raw:
             # Active state - filled with modern amber and subtle shadow
-            # First draw a subtle shadow/glow
-            shadow_rect = raw_rect.adjusted(-1, 1, 1, 1)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(245, 158, 11, 30))  # Semi-transparent amber
-            painter.drawRoundedRect(shadow_rect, 6, 6)
+            if not has_action:
+                # First draw a subtle shadow/glow
+                shadow_rect = raw_rect.adjusted(-1, 1, 1, 1)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(245, 158, 11, 30))  # Semi-transparent amber
+                painter.drawRoundedRect(shadow_rect, 6, 6)
             
-            # Then draw the main indicator
-            painter.setBrush(QColor("#f59e0b"))  # Amber
+            # Choose color based on action status and action type
+            if has_action:
+                if self.action.value == "delete_raw":
+                    painter.setBrush(QColor("#ef4444"))  # Red for deleted RAW
+                else:
+                    painter.setBrush(QColor("#6b7280"))  # Muted gray for other actions
+            else:
+                painter.setBrush(QColor("#f59e0b"))  # Amber for unprocessed
+                
+            painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(raw_rect, 6, 6)
             painter.setPen(QColor("#ffffff"))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -109,6 +140,28 @@ class FileStatusWidget(QWidget):
             painter.setPen(QColor("#606060"))
         
         painter.drawText(raw_rect, Qt.AlignmentFlag.AlignCenter, "RAW")
+        
+        # Add action indicator overlay
+        if has_action:
+            # Small indicator in top-right corner
+            indicator_size = 8
+            indicator_rect = self.rect().adjusted(
+                self.width() - indicator_size - 2, 2, 
+                -2, -(self.height() - indicator_size - 2)
+            )
+            
+            # Color based on action type
+            action_colors = {
+                "keep_all": QColor("#10b981"),    # Green
+                "delete_raw": QColor("#f59e0b"),  # Amber  
+                "delete_all": QColor("#ef4444"), # Red
+                "skipped": QColor("#6b7280")     # Gray
+            }
+            
+            action_color = action_colors.get(self.action.value, QColor("#6b7280"))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(action_color)
+            painter.drawEllipse(indicator_rect)
 
 
 class ImageLabel(QLabel):
@@ -193,6 +246,60 @@ class ImageLabel(QLabel):
                         event.acceptProposedAction()
                         return
         event.ignore()
+
+
+class ProgressWidget(QWidget):
+    """Widget to show session progress."""
+    
+    def __init__(self):
+        super().__init__()
+        self.processed = 0
+        self.total = 0
+        self.setFixedHeight(24)
+        self.setStyleSheet("background: transparent;")
+    
+    def update_progress(self, processed: int, total: int):
+        """Update progress values."""
+        self.processed = processed
+        self.total = total
+        self.update()
+        
+        # Update tooltip
+        if total > 0:
+            percentage = int((processed / total) * 100)
+            self.setToolTip(f"Progress: {processed}/{total} photos processed ({percentage}%)")
+        else:
+            self.setToolTip("No photos loaded")
+    
+    def paintEvent(self, event):
+        """Custom paint event for progress bar."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Background
+        bg_rect = self.rect().adjusted(0, 6, 0, -6)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#404040"))
+        painter.drawRoundedRect(bg_rect, 6, 6)
+        
+        # Progress bar
+        if self.total > 0:
+            progress_width = int((self.processed / self.total) * bg_rect.width())
+            if progress_width > 0:
+                progress_rect = bg_rect.adjusted(0, 0, -(bg_rect.width() - progress_width), 0)
+                painter.setBrush(QColor("#10b981"))
+                painter.drawRoundedRect(progress_rect, 6, 6)
+        
+        # Text
+        if self.total > 0:
+            percentage = int((self.processed / self.total) * 100)
+            text = f"{percentage}%"
+            painter.setPen(QColor("#e0e0e0"))
+            font = QFont()
+            font.setPointSize(9)
+            font.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(font)
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, text)
 
 
 class MainWindow(QMainWindow):
@@ -313,6 +420,10 @@ class MainWindow(QMainWindow):
         self.image_label = ImageLabel()
         main_layout.addWidget(self.image_label)
         
+        # Progress widget for session progress
+        self.progress_widget = ProgressWidget()
+        main_layout.addWidget(self.progress_widget)
+        
         # Action buttons with improved spacing and grouping
         button_container = QFrame()
         button_container.setStyleSheet("""
@@ -352,6 +463,32 @@ class MainWindow(QMainWindow):
         """)
         self.keep_all_btn.clicked.connect(self._keep_all_files)
         button_layout.addWidget(self.keep_all_btn)
+        
+        # Skip button (for marking as reviewed without action)
+        self.skip_btn = QPushButton("Skip (S)")
+        self.skip_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6b7280;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+            QPushButton:pressed {
+                background-color: #374151;
+            }
+            QPushButton:disabled {
+                background-color: #404040;
+                color: #808080;
+            }
+        """)
+        self.skip_btn.clicked.connect(self._skip_photo)
+        button_layout.addWidget(self.skip_btn)
         
         # Delete RAW button
         self.delete_raw_btn = QPushButton("Delete RAW (R)")
@@ -529,6 +666,7 @@ class MainWindow(QMainWindow):
         """Set up keyboard shortcuts."""
         # Action shortcuts
         QShortcut(QKeySequence("K"), self, self._keep_all_files)
+        QShortcut(QKeySequence("S"), self, self._skip_photo)
         QShortcut(QKeySequence("R"), self, self._delete_raw_file)
         QShortcut(QKeySequence("D"), self, self._delete_all_files)
         
@@ -542,6 +680,7 @@ class MainWindow(QMainWindow):
         self.photo_manager.photos_loaded.connect(self._on_photos_loaded)
         self.photo_manager.photo_deleted.connect(self._on_photo_deleted)
         self.photo_manager.error_occurred.connect(self._on_error)
+        self.photo_manager.session_updated.connect(self._on_session_updated)
         
         # Connect drag & drop signal
         self.image_label.folder_dropped.connect(self._on_folder_dropped)
@@ -582,6 +721,16 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Error", error_message)
         self.status_bar.showMessage("Error occurred")
     
+    def _on_session_updated(self):
+        """Handle session data updates."""
+        # Update the display to reflect new action status
+        self._update_display()
+        
+        # Update status bar with progress info
+        processed, total, percentage = self.photo_manager.get_session_progress()
+        if total > 0:
+            self.status_bar.showMessage(f"Progress: {processed}/{total} photos processed ({percentage}%)")
+    
     def _update_display(self):
         """Update the photo display and info."""
         photo = self.photo_manager.get_current_photo()
@@ -590,12 +739,16 @@ class MainWindow(QMainWindow):
             # Update filename
             self.filename_label.setText(photo.base_name)
             
-            # Update file status widget
-            self.file_status_widget.update_status(photo.has_jpeg, photo.has_raw)
+            # Update file status widget with action information
+            self.file_status_widget.update_status(photo.has_jpeg, photo.has_raw, photo.action)
             
             # Update counter
             current, total = self.photo_manager.get_photo_count()
             self.counter_label.setText(f"{current} / {total}")
+            
+            # Update progress widget
+            processed, total_photos, percentage = self.photo_manager.get_session_progress()
+            self.progress_widget.update_progress(processed, total_photos)
             
             # Load and display image
             self._load_image(photo.display_path)
@@ -608,8 +761,9 @@ class MainWindow(QMainWindow):
     def _clear_display(self):
         """Clear the display when no photo is available."""
         self.filename_label.setText("No file loaded")
-        self.file_status_widget.update_status(False, False)
+        self.file_status_widget.update_status(False, False, None)
         self.counter_label.setText("0 / 0")
+        self.progress_widget.update_progress(0, 0)
         self.image_label.clear()
         self.image_label.setText("No image loaded")
         self.current_pixmap = None
@@ -747,6 +901,7 @@ class MainWindow(QMainWindow):
         
         # Action buttons
         self.keep_all_btn.setEnabled(has_photos)
+        self.skip_btn.setEnabled(has_photos)
         self.delete_raw_btn.setEnabled(has_photos and photo.has_raw if photo else False)
         self.delete_all_btn.setEnabled(has_photos)
         
@@ -760,6 +915,15 @@ class MainWindow(QMainWindow):
         photo = self.photo_manager.get_current_photo()
         if photo:
             self.photo_manager.keep_both_files(photo)
+            self._next_photo()
+    
+    def _skip_photo(self):
+        """Skip current photo (mark as reviewed without action)."""
+        photo = self.photo_manager.get_current_photo()
+        if photo:
+            photo.set_action(PhotoAction.SKIPPED)
+            self.photo_manager._save_session_data()
+            self.photo_manager.session_updated.emit()
             self._next_photo()
     
     def _delete_raw_file(self):
