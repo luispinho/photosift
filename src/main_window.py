@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .photo_manager import PhotoManager, PhotoPair, PhotoAction
+from .preferences import Preferences
 
 
 @dataclass
@@ -510,7 +511,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.photo_manager = PhotoManager()
+        self.preferences = Preferences()
+        self.photo_manager = PhotoManager(self.preferences)
         self.current_pixmap: Optional[QPixmap] = None
         self.confirm_deletions = True  # Default to requiring confirmation
         self.pending_action: Optional[PendingAction] = None
@@ -874,6 +876,12 @@ class MainWindow(QMainWindow):
         self.confirm_action.triggered.connect(self._toggle_confirmation)
         settings_menu.addAction(self.confirm_action)
 
+        self.resume_session_action = QAction("Resume Session Automatically", self)
+        self.resume_session_action.setCheckable(True)
+        self.resume_session_action.setChecked(self.preferences.get_resume_session())
+        self.resume_session_action.triggered.connect(self._toggle_resume_session)
+        settings_menu.addAction(self.resume_session_action)
+
     def _setup_shortcuts(self):
         """Set up keyboard shortcuts."""
         # Action shortcuts
@@ -927,7 +935,16 @@ class MainWindow(QMainWindow):
         self._clear_image_cache()
 
         if count > 0:
-            self.status_bar.showMessage(f"Loaded {count} photos")
+            # Check if we're resuming a session
+            resume_info = self.photo_manager.get_resume_info()
+            if resume_info:
+                self.status_bar.showMessage(
+                    f"Resumed session: {resume_info['processed']}/{resume_info['total']} photos processed. "
+                    f"Continuing from photo {resume_info['current_index']}/{resume_info['total']}"
+                )
+            else:
+                self.status_bar.showMessage(f"Loaded {count} photos")
+
             self._update_display()
         else:
             self.status_bar.showMessage("No photos found in folder")
@@ -1305,6 +1322,10 @@ class MainWindow(QMainWindow):
     def _toggle_confirmation(self):
         """Toggle deletion confirmation setting."""
         self.confirm_deletions = self.confirm_action.isChecked()
+
+    def _toggle_resume_session(self):
+        """Toggle session resumption setting."""
+        self.preferences.set_resume_session(self.resume_session_action.isChecked())
 
     def _clear_image_cache(self):
         """Clear the image cache to free memory."""

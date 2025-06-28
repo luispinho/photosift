@@ -85,8 +85,9 @@ class PhotoManager(QObject):
     RAW_EXTENSIONS = {'.cr2', '.CR2', '.cr3', '.CR3'}
     SESSION_FILE = '.photosift_session.json'
 
-    def __init__(self):
+    def __init__(self, preferences=None):
         super().__init__()
+        self.preferences = preferences
         self.current_folder: Optional[Path] = None
         self.photo_pairs: List[PhotoPair] = []
         self.current_index = 0
@@ -105,7 +106,12 @@ class PhotoManager(QObject):
 
             # Scan for photo files
             self._scan_photos()
-            self.current_index = 0
+
+            # Set current index to first unprocessed photo for session resumption
+            self._set_resume_index()
+
+            # Emit signal with count after resume index is set
+            self.photos_loaded.emit(len(self.photo_pairs))
 
             return True
 
@@ -147,8 +153,7 @@ class PhotoManager(QObject):
         # Apply session data to restored photos
         self._apply_session_data()
 
-        # Emit signal with count
-        self.photos_loaded.emit(len(self.photo_pairs))
+        # Note: Signal emission moved to load_folder after _set_resume_index()
 
     def get_current_photo(self) -> Optional[PhotoPair]:
         """Get current photo pair."""
@@ -309,6 +314,51 @@ class PhotoManager(QObject):
                     # Invalid action data, skip
                     pass
 
+    def has_existing_session(self) -> bool:
+        """Check if the current folder has an existing session file."""
+        if not self.current_folder:
+            return False
+        session_file = self.current_folder / self.SESSION_FILE
+        return session_file.exists()
+
+    def get_resume_info(self) -> Optional[dict]:
+        """Get information about session resumption."""
+        if not self.photo_pairs:
+            return None
+
+        processed_count = sum(1 for photo in self.photo_pairs if photo.has_action)
+        total_count = len(self.photo_pairs)
+        current_photo = self.get_current_photo()
+
+        if processed_count > 0 and current_photo and not current_photo.has_action:
+            return {
+                'processed': processed_count,
+                'total': total_count,
+                'current_photo': current_photo.base_name,
+                'current_index': self.current_index + 1
+            }
+        return None
+
+    def _set_resume_index(self):
+        """Set current index to the first photo without an action for session resumption."""
+        if not self.photo_pairs:
+            self.current_index = 0
+            return
+
+        # Check if session resumption is enabled in preferences
+        if self.preferences and not self.preferences.get_resume_session():
+            self.current_index = 0
+            return
+
+        # Find the first photo without an action
+        for i, photo in enumerate(self.photo_pairs):
+            if not photo.has_action:
+                self.current_index = i
+                return
+
+        # If all photos have actions, stay at the beginning
+        self.current_index = 0
+
     def get_session_progress(self) -> Tuple[int, int, int]:
         """Get session progress: (processed, total, percentage)."""
         if not self.photo_pairs:
@@ -319,6 +369,41 @@ class PhotoManager(QObject):
         percentage = int((processed / total) * 100) if total > 0 else 0
 
         return processed, total, percentage
+
+    def get_photos_by_action(self, action: PhotoAction) -> List[PhotoPair]:
+        """Get all photos with a specific action."""
+        return [photo for photo in self.photo_pairs if photo.action == action]
+
+    def get_unprocessed_photos(self) -> List[PhotoPair]:
+        """Get all photos that haven't been processed yet."""
+        return self.get_photos_by_action(PhotoAction.NONE)
+
+    def get_next_unprocessed_index(self, from_index: int = None) -> Optional[int]:
+        """Get the index of the next unprocessed photo from the given index."""
+        if not self.photo_pairs:
+            return None
+
+        start_index = from_index if from_index is not None else self.current_index
+
+        # Search from the given index forward
+        for i in range(start_index, len(self.photo_pairs)):
+            if not self.photo_pairs[i].has_action:
+                return i
+
+        # Search from the beginning to the given index
+        for i in range(0, start_index):
+            if not self.photo_pairs[i].has_action:
+                return i
+
+        return None  # No unprocessed photos found
+
+    def jump_to_next_unprocessed(self) -> bool:
+        """Jump to the next unprocessed photo. Returns True if found."""
+        next_index = self.get_next_unprocessed_index(self.current_index + 1)
+        if next_index is not None:
+            self.current_index = next_index
+            return True
+        return False
 
     def get_action_summary(self) -> Dict[PhotoAction, int]:
         """Get summary of actions taken."""
