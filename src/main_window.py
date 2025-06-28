@@ -20,6 +20,7 @@ from typing import Callable
 
 from .photo_manager import PhotoManager, PhotoPair, PhotoAction
 from .preferences import Preferences
+from .photo_sidebar import PhotoSidebar
 
 
 @dataclass
@@ -516,6 +517,7 @@ class MainWindow(QMainWindow):
         self.current_pixmap: Optional[QPixmap] = None
         self.confirm_deletions = True  # Default to requiring confirmation
         self.pending_action: Optional[PendingAction] = None
+        self.is_session_resume = False  # Track if we're currently in session resume
 
         # Image cache for faster navigation
         self.image_cache = {}  # path -> QPixmap
@@ -588,8 +590,22 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Main layout
-        main_layout = QVBoxLayout(central_widget)
+        # Main horizontal layout (sidebar + content)
+        main_horizontal_layout = QHBoxLayout(central_widget)
+        main_horizontal_layout.setSpacing(0)
+        main_horizontal_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create sidebar
+        self.sidebar = PhotoSidebar(self.photo_manager)
+        self.sidebar.photo_selected.connect(self._on_sidebar_photo_selected)
+        main_horizontal_layout.addWidget(self.sidebar)
+
+        # Content area
+        content_widget = QWidget()
+        main_horizontal_layout.addWidget(content_widget, 1)
+
+        # Main content layout (was the previous main_layout)
+        main_layout = QVBoxLayout(content_widget)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
@@ -867,6 +883,16 @@ class MainWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
+        # View menu
+        view_menu = menubar.addMenu("View")
+
+        self.sidebar_action = QAction("Show Photo List", self)
+        self.sidebar_action.setCheckable(True)
+        self.sidebar_action.setChecked(True)
+        self.sidebar_action.setShortcut(QKeySequence("Ctrl+B"))
+        self.sidebar_action.triggered.connect(self._toggle_sidebar)
+        view_menu.addAction(self.sidebar_action)
+
         # Settings menu
         settings_menu = menubar.addMenu("Settings")
 
@@ -899,6 +925,9 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Right"), self, self._next_photo)
         QShortcut(QKeySequence("Space"), self, self._next_photo)
 
+        # View shortcuts
+        QShortcut(QKeySequence("Ctrl+B"), self, self._toggle_sidebar_shortcut)
+
     def _undo_action(self):
         """Undo the current pending action."""
         if self.pending_action:
@@ -917,6 +946,16 @@ class MainWindow(QMainWindow):
 
         # Connect drag & drop signal
         self.image_label.folder_dropped.connect(self._on_folder_dropped)
+
+    def _on_sidebar_photo_selected(self, base_name: str):
+        """Handle photo selection from sidebar."""
+        # Find the photo index
+        for i, photo in enumerate(self.photo_manager.photo_pairs):
+            if photo.base_name == base_name:
+                self.photo_manager.current_index = i
+                self._update_display()
+                break
+
     def _open_folder(self):
         """Open folder dialog and load photos."""
         folder = QFileDialog.getExistingDirectory(
@@ -938,14 +977,18 @@ class MainWindow(QMainWindow):
             # Check if we're resuming a session
             resume_info = self.photo_manager.get_resume_info()
             if resume_info:
+                self.is_session_resume = True
                 self.status_bar.showMessage(
                     f"Resumed session: {resume_info['processed']}/{resume_info['total']} photos processed. "
                     f"Continuing from photo {resume_info['current_index']}/{resume_info['total']}"
                 )
             else:
+                self.is_session_resume = False
                 self.status_bar.showMessage(f"Loaded {count} photos")
 
             self._update_display()
+            # Reset the flag after the first display update
+            self.is_session_resume = False
         else:
             self.status_bar.showMessage("No photos found in folder")
             self._clear_display()
@@ -1004,6 +1047,9 @@ class MainWindow(QMainWindow):
                 self.image_label.clear()
                 self.image_label.setText("Files have been deleted")
                 self.current_pixmap = None
+
+            # Update sidebar current photo
+            self.sidebar.set_current_photo(photo.base_name, auto_scroll=self.is_session_resume)
 
             # Preload adjacent images for faster navigation
             QTimer.singleShot(100, self._preload_adjacent_images)
@@ -1322,6 +1368,18 @@ class MainWindow(QMainWindow):
     def _toggle_confirmation(self):
         """Toggle deletion confirmation setting."""
         self.confirm_deletions = self.confirm_action.isChecked()
+
+    def _toggle_sidebar_shortcut(self):
+        """Toggle sidebar via keyboard shortcut."""
+        self.sidebar_action.setChecked(not self.sidebar_action.isChecked())
+        self._toggle_sidebar()
+
+    def _toggle_sidebar(self):
+        """Toggle sidebar visibility."""
+        if self.sidebar_action.isChecked():
+            self.sidebar.show()
+        else:
+            self.sidebar.hide()
 
     def _toggle_resume_session(self):
         """Toggle session resumption setting."""
